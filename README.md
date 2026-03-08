@@ -161,3 +161,7 @@ This will create a `.venv` folder for python under `~/Work/my-webapp/` and will 
 ## Helper scripts
 
 The ayuna-udk also provides a bunch of helper scripts under `~/.udk/bin` folder for various uses. This path is automatically added to the PATH env, if you have completed the `setup udk` section.
+
+## Creating Self-Signed CA (SSCA)
+
+Under `~/.udk/bin` folder, there is a script named `udk-self-signed-ca` which is meant to create self-signed certificates and manage them. The script also provides command-line help if run without arguments. The sample configuration file at `~/.udk/skel/ssca/sample01.rc` can be copied into a new file and edited with appropriate values. The file can then be passed as an argument to the script to generate SSCA set for the given domain.

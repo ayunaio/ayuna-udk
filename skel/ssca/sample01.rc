@@ -1,5 +1,5 @@
 #######################################################
-## Remember to put space-separated values in quotes. ##
+## REMINDER: Put space-separated values in quotes!   ##
 ## All the fields below are mandatory.               ##
 #######################################################
 
@@ -22,4 +22,40 @@ CA_VALID_DAYS=750
 CA_CERT_PASS=SampleServPass123
 CA_CERT_FQDN=sample01.example.com
 CA_CERT_SAN="DNS:sample01,DNS:sample01.example.com,IP:192.168.0.10"
-CA_CERT_VALID_DAYS=730 ## At the time of creation, this value should be less than remaining CA_VALID_DAYS
+CA_CERT_VALID_DAYS=730 ## Must be less than remaining CA_VALID_DAYS
+
+#######################################################
+## NOTE: Certificate Subject Uniqueness              ##
+##                                                   ##
+## The CA enforces unique certificate subjects       ##
+## (Common Name) by default. This means you cannot   ##
+## create multiple certificates (RSA + ECDSA) with   ##
+## the same subject. This is standard PKI security   ##
+## behavior to prevent accidental duplicates.        ##
+##                                                   ##
+## Workarounds if you need both RSA and ECDSA:       ##
+##   1. Use different FQDNs/subjects                 ##
+##   2. Delete the old cert from ssl/index.txt       ##
+##   3. Use separate CAs for RSA and ECDSA           ##
+##                                                   ##
+## Most deployments choose ONE algorithm per service ##
+## (RSA for compatibility, ECDSA for performance)    ##
+#######################################################
+
+#######################################################
+## Available Commands:                               ##
+##   gen-rootca        - Create Root CA              ##
+##   gen-server-cert   - Create RSA server cert      ##
+##   gen-client-cert   - Create RSA client cert      ##
+##   gen-server-ecdsa  - Create ECDSA server cert    ##
+##   gen-client-ecdsa  - Create ECDSA client cert    ##
+##   check-expiry      - Check certificate expiry    ##
+##   cleanup-ca        - Remove all CA files         ##
+##                                                   ##
+## Output Files:                                     ##
+##   - *.pem           - Certificate (PEM format)    ##
+##   - *-fullchain.pem - Full chain (cert + root CA) ##
+##   - *.pkcs12        - PKCS12 bundle with chain    ##
+##   - *.p12           - Java-compatible PKCS12      ##
+##   - *-k8s-secret.yaml - Kubernetes TLS secret     ##
+#######################################################

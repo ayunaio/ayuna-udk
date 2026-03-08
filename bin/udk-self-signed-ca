@@ -2,20 +2,41 @@
 
 export IFS=$(echo -en '\n\b')
 
-usage_help="Usage: $(basename $0) <ssca-command> <ssca-config-file>"
-cmds_help="Commands: gen-rootca | gen-server-cert | gen-client-cert | cleanup-ca"
+## Terminal color codes (can be overridden by environment)
+TRML_HL="${TRML_HL:-\033[1;36m}" ## Highlight color (cyan)
+TRML_NC="${TRML_NC:-\033[0m}"    ## No color (reset)
+
+usage_help="Usage: $(basename "$0") <ssca-command> <ssca-config-file>"
+cmds_help="Commands: gen-rootca | gen-server-cert | gen-client-cert | gen-server-ecdsa | gen-client-ecdsa | check-expiry | cleanup-ca"
 
 ## Check for required commandline arguments
-if [ $# -ne 2 ]; then
-    echo -e $usage_help
-    echo -e $cmds_help
+if [ $# -lt 2 ]; then
+    echo -e "$usage_help"
+    echo -e "$cmds_help"
     exit 1
 fi
 
 CMD=$1
 CONFIG_FILE=$2
 
+## Check for required external commands
+OPENSSL_CMD=$(command -v openssl 2>/dev/null)
+if [ -z "$OPENSSL_CMD" ]; then
+    echo -e "Error: openssl command not found in PATH"
+    exit 1
+fi
+
 JAVA_KEYTOOL=$(command -v keytool 2>/dev/null)
+if [ -z "$JAVA_KEYTOOL" ]; then
+    echo -e "Warning: keytool not found in PATH. PKCS12/JKS file creation will be skipped."
+fi
+
+## Check for udk-get-self-dir command
+UDK_GET_SELF_DIR=$(command -v udk-get-self-dir 2>/dev/null)
+if [ -z "$UDK_GET_SELF_DIR" ]; then
+    echo -e "Error: udk-get-self-dir command not found in PATH"
+    exit 1
+fi
 
 ## Check for the existance of configuration file
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -49,18 +70,18 @@ for param in "${req_config_params[@]}"; do
     export $param
 done
 
-if [ ! $(echo $CA_CERT_FQDN | grep -P '(?=^.{1,254}$)(^(?>(?!\d+\.)[a-zA-Z0-9_\-]{1,63}\.?)+(?:[a-zA-Z]{2,})$)') ]; then
+if [[ ! "$CA_CERT_FQDN" =~ ^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$ ]] || [[ "$CA_CERT_FQDN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo -e "CA Certificate common-name should be a Fully Qualified Domain Name (FQDN)"
     exit 1
 fi
 
 ## Enter the setup base folder
-script_base=$(udk-get-self-dir $0)
+script_base=$("$UDK_GET_SELF_DIR" "$0")
 ssca_name="$(echo "$CA_COMMON_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's| \+|-|g')"
 
 ## Setup the SSCA base folder
 export SSCA_BASE="${CA_BASE}/${ssca_name}"
-mkdir -p ${SSCA_BASE} && sync
+mkdir -p "${SSCA_BASE}"
 
 ## Common / global variables
 rootca_cert="rootca-cert.pem"
@@ -68,7 +89,7 @@ rootca_key="rootca-key.pem"
 
 function gen_rootca() {
     echo -e "${TRML_HL}Entering SSCA setup folder (${SSCA_BASE})...${TRML_NC}"
-    pushd $SSCA_BASE >/dev/null
+    pushd "$SSCA_BASE" >/dev/null
 
     ## Check for previous dist folder
     if [ -f "ssl/certs/${rootca_cert}" ]; then
@@ -90,33 +111,33 @@ function gen_rootca() {
     echo 1000 >ssl/serial
     echo 1000 >ssl/crlnumber
 
-    cp -a ${script_base}/../skel/ssca/openssl_rootca.cnf openssl_rootca.cnf && sync
-    cp -a ${script_base}/../skel/ssca/openssl_fqdn.cnf openssl_fqdn.cnf && sync
+    cp -a "${script_base}/../skel/ssca/openssl_rootca.cnf" openssl_rootca.cnf
+    cp -a "${script_base}/../skel/ssca/openssl_fqdn.cnf" openssl_fqdn.cnf
     chmod 644 *.cnf
 
     ## Create the rootca certificate
     echo -e "${TRML_HL}Creating rootca certificate and key pair...${TRML_NC}"
     openssl req -new -x509 -sha256 \
         -config openssl_rootca.cnf \
-        -passin pass:$ROOTCA_PASS \
-        -passout pass:$ROOTCA_PASS \
+        -passin pass:"$ROOTCA_PASS" \
+        -passout pass:"$ROOTCA_PASS" \
         -subj "/CN=${CA_COMMON_NAME}" \
-        -days ${CA_VALID_DAYS} \
+        -days "${CA_VALID_DAYS}" \
         -extensions v3_ca \
-        -keyout ssl/private/${rootca_key} \
-        -out ssl/certs/${rootca_cert} >/dev/null
+        -keyout "ssl/private/${rootca_key}" \
+        -out "ssl/certs/${rootca_cert}" >/dev/null
 
-    chmod 400 ssl/private/${rootca_key}
-    chmod 444 ssl/certs/${rootca_cert}
+    chmod 400 "ssl/private/${rootca_key}"
+    chmod 444 "ssl/certs/${rootca_cert}"
 
     ## Verify the rootca certificate
     echo -e "${TRML_HL}Verifying rootca certificate...${TRML_NC}"
-    openssl x509 -noout -text -passin pass:$ROOTCA_PASS -in ssl/certs/${rootca_cert} >/dev/null
+    openssl x509 -noout -text -passin pass:"$ROOTCA_PASS" -in "ssl/certs/${rootca_cert}" >/dev/null
 
     ## Create base64 encoded rootca certificate
     echo -e "${TRML_HL}Creating rootca base64 file...${TRML_NC}"
-    openssl x509 -in ssl/certs/${rootca_cert} -outform der | base64 -w0 >ssl/certs/rootca-cert.der && sync
-    chmod 444 ssl/certs/rootca-cert.der
+    openssl x509 -in "ssl/certs/${rootca_cert}" -outform der | base64 -w0 >"ssl/certs/rootca-cert.der"
+    chmod 444 "ssl/certs/rootca-cert.der"
 
     ## Create certificate chain trust-store (JKS)
     if [ -n "$JAVA_KEYTOOL" ]; then
@@ -125,12 +146,12 @@ function gen_rootca() {
         keytool -importcert \
             -noprompt \
             -trustcacerts \
-            -keystore ssl/certs/rootca-cert.jks \
-            -storepass $ROOTCA_PASS \
+            -keystore "ssl/certs/rootca-cert.p12" \
+            -storepass "$ROOTCA_PASS" \
             -alias "ssca-rootca" \
-            -file ssl/certs/${rootca_cert} && sync
+            -file "ssl/certs/${rootca_cert}"
 
-        chmod 444 ssl/certs/rootca-cert.jks
+        chmod 444 "ssl/certs/rootca-cert.p12"
     fi
 
     ## Exit the ssca folder
@@ -149,7 +170,7 @@ function gen_machine_certificate() {
     fi
 
     if [ "$cert_type" == "server" ]; then
-        local cert_server="$(echo $CA_CERT_FQDN | sed -e 's/\./-/g')"
+        local cert_server="$(echo "$CA_CERT_FQDN" | sed -e 's/\./-/g')"
         local cert_subj="/C=${CA_COUNTRY}/ST=${CA_STATE}/L=${CA_LOCATION}/O=${CA_ORGANIZATION}/OU=${CA_ORG_UNIT}/CN=${CA_CERT_FQDN}"
         local cert_name="${cert_server}-${cert_type}-cert"
         local csr_name="${cert_server}-${cert_type}-csr"
@@ -163,7 +184,7 @@ function gen_machine_certificate() {
     fi
 
     echo -e "Entering SSCA setup folder (${SSCA_BASE})..."
-    pushd $SSCA_BASE >/dev/null
+    pushd "$SSCA_BASE" >/dev/null
 
     ## Check for existance of certificate file
     if [ -f "ssl/certs/${cert_name}.pem" ]; then
@@ -195,32 +216,32 @@ function gen_machine_certificate() {
     echo -e "Creating csr and key pair for ${TRML_HL}${CA_CERT_FQDN}...${TRML_NC}"
     openssl req -new -sha256 \
         -config openssl_fqdn.cnf \
-        -passin pass:$CA_CERT_PASS \
-        -passout pass:$CA_CERT_PASS \
-        -extensions ${extn_type} \
+        -passin pass:"$CA_CERT_PASS" \
+        -passout pass:"$CA_CERT_PASS" \
+        -extensions "${extn_type}" \
         -subj "${cert_subj}" \
-        -keyout ssl/private/${key_name}.pem \
-        -out ssl/csr/${csr_name}.pem >/dev/null
+        -keyout "ssl/private/${key_name}.pem" \
+        -out "ssl/csr/${csr_name}.pem" >/dev/null
 
-    chmod 400 ssl/private/${key_name}.pem
+    chmod 400 "ssl/private/${key_name}.pem"
 
     echo -e "Creating rootca self-signed certificate for ${TRML_HL}${CA_CERT_FQDN}...${TRML_NC}"
     openssl ca -notext -batch \
         -config openssl_fqdn.cnf \
-        -extensions ${extn_type} \
-        -days ${CA_CERT_VALID_DAYS} \
+        -extensions "${extn_type}" \
+        -days "${CA_CERT_VALID_DAYS}" \
         -md sha256 \
-        -passin pass:$ROOTCA_PASS \
-        -in ssl/csr/${csr_name}.pem \
-        -out ssl/certs/${cert_name}.pem >/dev/null
+        -passin pass:"$ROOTCA_PASS" \
+        -in "ssl/csr/${csr_name}.pem" \
+        -out "ssl/certs/${cert_name}.pem" >/dev/null
 
-    chmod 444 ssl/certs/${cert_name}.pem
+    chmod 444 "ssl/certs/${cert_name}.pem"
 
     echo -e "${TRML_HL}Verifying certificate...${TRML_NC}"
-    openssl x509 -noout -text -passin pass:$CA_CERT_PASS -in ssl/certs/${cert_name}.pem >/dev/null
+    openssl x509 -noout -text -passin pass:"$CA_CERT_PASS" -in "ssl/certs/${cert_name}.pem" >/dev/null
 
     echo -e "${TRML_HL}Validating certificate against rootca...${TRML_NC}"
-    is_cert_ok="$(openssl verify -CAfile ssl/certs/${rootca_cert} ssl/certs/${cert_name}.pem | grep -E -i "${cert_name}.pem: OK" | grep -v "grep")"
+    is_cert_ok="$(openssl verify -CAfile "ssl/certs/${rootca_cert}" "ssl/certs/${cert_name}.pem" | grep -E -i "${cert_name}.pem: OK" | grep -v "grep")"
 
     if [ -z "$is_cert_ok" ]; then
         echo -e "Something wrong happened while creating certificate for ${CA_CERT_FQDN}!"
@@ -230,12 +251,34 @@ function gen_machine_certificate() {
     fi
 
     echo -e "${TRML_HL}Creating certificate in pkcs12 format...${TRML_NC}"
-    cat ssl/certs/${cert_name}.pem ssl/private/${key_name}.pem >ssl/certs/${cert_name}-with-key.pem
     openssl pkcs12 -export \
-        -passin pass:$CA_CERT_PASS \
-        -passout pass:$CA_CERT_PASS \
-        -in ssl/certs/${cert_name}-with-key.pem \
-        -out ssl/certs/${cert_name}.pkcs12
+        -passin pass:"$CA_CERT_PASS" \
+        -passout pass:"$CA_CERT_PASS" \
+        -inkey "ssl/private/${key_name}.pem" \
+        -in "ssl/certs/${cert_name}.pem" \
+        -certfile "ssl/certs/${rootca_cert}" \
+        -out "ssl/certs/${cert_name}.pkcs12"
+
+    ## Create full certificate chain file (for nginx/ingress controllers)
+    echo -e "${TRML_HL}Creating full certificate chain file...${TRML_NC}"
+    cat "ssl/certs/${cert_name}.pem" "ssl/certs/${rootca_cert}" >"ssl/certs/${cert_name}-fullchain.pem"
+    chmod 444 "ssl/certs/${cert_name}-fullchain.pem"
+
+    ## Generate Kubernetes TLS secret manifest
+    echo -e "${TRML_HL}Creating Kubernetes TLS secret manifest...${TRML_NC}"
+    cat >"ssl/certs/${cert_name}-k8s-secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${cert_server}-tls
+type: kubernetes.io/tls
+data:
+  tls.crt: |
+$(openssl base64 -A -in "ssl/certs/${cert_name}-fullchain.pem" | sed 's/^/    /')
+  tls.key: |
+$(openssl base64 -A -in "ssl/private/${key_name}.pem" | sed 's/^/    /')
+EOF
+    chmod 444 "ssl/certs/${cert_name}-k8s-secret.yaml"
 
     if [ -n "$JAVA_KEYTOOL" ]; then
         echo -e "${TRML_HL}Creating Java KeyStore File...${TRML_NC}"
@@ -243,24 +286,172 @@ function gen_machine_certificate() {
             -noprompt \
             -srcstoretype pkcs12 \
             -srcalias "1" \
-            -srckeystore ssl/certs/${cert_name}.pkcs12 \
-            -srcstorepass $CA_CERT_PASS \
-            -destkeystore ssl/certs/${cert_name}.jks \
+            -srckeystore "ssl/certs/${cert_name}.pkcs12" \
+            -srcstorepass "$CA_CERT_PASS" \
+            -destkeystore "ssl/certs/${cert_name}.p12" \
             -deststoretype pkcs12 \
             -destalias "${CA_CERT_FQDN}" \
-            -deststorepass $CA_CERT_PASS && sync
+            -deststorepass "$CA_CERT_PASS"
 
         echo -e "${TRML_HL}Adding rootca certificates to Java KeyStore File...${TRML_NC}"
         keytool -importcert \
             -noprompt \
             -trustcacerts \
-            -keystore ssl/certs/${cert_name}.jks \
-            -storepass $CA_CERT_PASS \
+            -keystore "ssl/certs/${cert_name}.p12" \
+            -storepass "$CA_CERT_PASS" \
             -alias "${cert_type}-rootca" \
-            -file ssl/certs/${rootca_cert} && sync
+            -file "ssl/certs/${rootca_cert}"
     fi
 
-    rm -f ssl/certs/${cert_name}-with-key.pem
+    ## Exit the setup base folder
+    popd >/dev/null
+
+    echo -e "${TRML_HL}All Done.${TRML_NC}"
+}
+
+function gen_ecdsa_machine_certificate() {
+    local cert_type=${1:-"server"}
+
+    ## Check for valid certificate type
+    if [ "$cert_type" != "server" ] && [ "$cert_type" != "client" ]; then
+        echo -e "Certificate type '$cert_type' is not supported! It should be 'server' or 'client'."
+        exit 1
+    fi
+
+    if [ "$cert_type" == "server" ]; then
+        local cert_server="$(echo "$CA_CERT_FQDN" | sed -e 's/\./-/g')"
+        local cert_subj="/C=${CA_COUNTRY}/ST=${CA_STATE}/L=${CA_LOCATION}/O=${CA_ORGANIZATION}/OU=${CA_ORG_UNIT}/CN=${CA_CERT_FQDN}"
+        local cert_name="${cert_server}-${cert_type}-cert-ecdsa"
+        local csr_name="${cert_server}-${cert_type}-csr-ecdsa"
+        local key_name="${cert_server}-${cert_type}-key-ecdsa"
+    else
+        local cert_client="$(hostnamectl --static)"
+        local cert_subj="/CN=${cert_client}"
+        local cert_name="${cert_client}-${cert_type}-cert-ecdsa"
+        local csr_name="${cert_client}-${cert_type}-csr-ecdsa"
+        local key_name="${cert_client}-${cert_type}-key-ecdsa"
+    fi
+
+    echo -e "Entering SSCA setup folder (${SSCA_BASE})..."
+    pushd "$SSCA_BASE" >/dev/null
+
+    ## Check for existance of certificate file
+    if [ -f "ssl/certs/${cert_name}.pem" ]; then
+        mesg="${TRML_HL}'${cert_name}.pem'${TRML_NC}"
+
+        echo -e "Server certificate $mesg already exists in $(pwd)/ssl/certs folder! Will not create it again."
+        popd >/dev/null
+        exit 0
+    fi
+
+    ## Check for previous rootca folder
+    if [ ! -f "ssl/certs/${rootca_cert}" ]; then
+        mesg="${TRML_HL}'${rootca_cert}'${TRML_NC}"
+
+        echo -e "Root CA certificate $mesg does not exist in $(pwd)/ssl/certs folder! Cannot create $cert_type certificate."
+        popd >/dev/null
+        exit 1
+    fi
+
+    ## Check extension type based onf certificate type
+    if [ "$cert_type" == "server" ]; then
+        extn_type="server_cert"
+    else
+        extn_type="usr_cert"
+    fi
+
+    echo -e "Using extension type: ${TRML_HL}'${extn_type}'${TRML_NC}"
+
+    echo -e "Creating ECDSA csr and key pair for ${TRML_HL}${CA_CERT_FQDN}...${TRML_NC}"
+    openssl req -new -sha256 \
+        -config openssl_fqdn.cnf \
+        -passin pass:"$CA_CERT_PASS" \
+        -passout pass:"$CA_CERT_PASS" \
+        -extensions "${extn_type}" \
+        -subj "${cert_subj}" \
+        -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+        -keyout "ssl/private/${key_name}.pem" \
+        -out "ssl/csr/${csr_name}.pem" >/dev/null
+
+    chmod 400 "ssl/private/${key_name}.pem"
+
+    echo -e "Creating rootca self-signed certificate for ${TRML_HL}${CA_CERT_FQDN}...${TRML_NC}"
+    openssl ca -notext -batch \
+        -config openssl_fqdn.cnf \
+        -extensions "${extn_type}" \
+        -days "${CA_CERT_VALID_DAYS}" \
+        -md sha256 \
+        -passin pass:"$ROOTCA_PASS" \
+        -in "ssl/csr/${csr_name}.pem" \
+        -out "ssl/certs/${cert_name}.pem" >/dev/null
+
+    chmod 444 "ssl/certs/${cert_name}.pem"
+
+    echo -e "${TRML_HL}Verifying ECDSA certificate...${TRML_NC}"
+    openssl x509 -noout -text -passin pass:"$CA_CERT_PASS" -in "ssl/certs/${cert_name}.pem" >/dev/null
+
+    echo -e "${TRML_HL}Validating certificate against rootca...${TRML_NC}"
+    is_cert_ok="$(openssl verify -CAfile "ssl/certs/${rootca_cert}" "ssl/certs/${cert_name}.pem" | grep -E -i "${cert_name}.pem: OK" | grep -v "grep")"
+
+    if [ -z "$is_cert_ok" ]; then
+        echo -e "Something wrong happened while creating certificate for ${CA_CERT_FQDN}!"
+        popd >/dev/null ## Exit from setup base folder
+
+        exit 1
+    fi
+
+    echo -e "${TRML_HL}Creating ECDSA certificate in pkcs12 format...${TRML_NC}"
+    openssl pkcs12 -export \
+        -passin pass:"$CA_CERT_PASS" \
+        -passout pass:"$CA_CERT_PASS" \
+        -inkey "ssl/private/${key_name}.pem" \
+        -in "ssl/certs/${cert_name}.pem" \
+        -certfile "ssl/certs/${rootca_cert}" \
+        -out "ssl/certs/${cert_name}.pkcs12"
+
+    ## Create full certificate chain file (for nginx/ingress controllers)
+    echo -e "${TRML_HL}Creating full certificate chain file...${TRML_NC}"
+    cat "ssl/certs/${cert_name}.pem" "ssl/certs/${rootca_cert}" >"ssl/certs/${cert_name}-fullchain.pem"
+    chmod 444 "ssl/certs/${cert_name}-fullchain.pem"
+
+    ## Generate Kubernetes TLS secret manifest
+    echo -e "${TRML_HL}Creating Kubernetes TLS secret manifest...${TRML_NC}"
+    cat >"ssl/certs/${cert_name}-k8s-secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${cert_server}-tls-ecdsa
+type: kubernetes.io/tls
+data:
+  tls.crt: |
+$(openssl base64 -A -in "ssl/certs/${cert_name}-fullchain.pem" | sed 's/^/    /')
+  tls.key: |
+$(openssl base64 -A -in "ssl/private/${key_name}.pem" | sed 's/^/    /')
+EOF
+    chmod 444 "ssl/certs/${cert_name}-k8s-secret.yaml"
+
+    if [ -n "$JAVA_KEYTOOL" ]; then
+        echo -e "${TRML_HL}Creating Java KeyStore File...${TRML_NC}"
+        keytool -importkeystore \
+            -noprompt \
+            -srcstoretype pkcs12 \
+            -srcalias "1" \
+            -srckeystore "ssl/certs/${cert_name}.pkcs12" \
+            -srcstorepass "$CA_CERT_PASS" \
+            -destkeystore "ssl/certs/${cert_name}.p12" \
+            -deststoretype pkcs12 \
+            -destalias "${CA_CERT_FQDN}" \
+            -deststorepass "$CA_CERT_PASS"
+
+        echo -e "${TRML_HL}Adding rootca certificates to Java KeyStore File...${TRML_NC}"
+        keytool -importcert \
+            -noprompt \
+            -trustcacerts \
+            -keystore "ssl/certs/${cert_name}.p12" \
+            -storepass "$CA_CERT_PASS" \
+            -alias "${cert_type}-rootca" \
+            -file "ssl/certs/${rootca_cert}"
+    fi
 
     ## Exit the setup base folder
     popd >/dev/null
@@ -269,7 +460,50 @@ function gen_machine_certificate() {
 }
 
 function cleanup_ca() {
-    [[ -d ${SSCA_BASE} ]] && rm -rf ${SSCA_BASE} && echo -e "${TRML_HL}Cleanup complete.${TRML_NC}"
+    [[ -d "${SSCA_BASE}" ]] && rm -rf "${SSCA_BASE}" && echo -e "${TRML_HL}Cleanup complete.${TRML_NC}"
+}
+
+function check_cert_expiry() {
+    local cert_type="${1:-server}"
+    local cert_file
+
+    echo -e "${TRML_HL}Checking certificate expiry...${TRML_NC}"
+    pushd "$SSCA_BASE" >/dev/null
+
+    if [ "$cert_type" == "rootca" ]; then
+        cert_file="ssl/certs/${rootca_cert}"
+        if [ -f "$cert_file" ]; then
+            echo -e "Root CA certificate:"
+            openssl x509 -in "$cert_file" -noout -dates -subject
+            local end_date=$(openssl x509 -in "$cert_file" -noout -enddate | cut -d= -f2)
+            local end_epoch=$(date -d "$end_date" +%s)
+            local now_epoch=$(date +%s)
+            local days_left=$(((end_epoch - now_epoch) / 86400))
+            echo -e "  ${TRML_HL}Days remaining: $days_left${TRML_NC}"
+        else
+            echo -e "Root CA certificate not found"
+            popd >/dev/null
+            exit 1
+        fi
+    else
+        local cert_server="$(echo "$CA_CERT_FQDN" | sed -e 's/\./-/g')"
+        cert_file="ssl/certs/${cert_server}-${cert_type}-cert.pem"
+        if [ -f "$cert_file" ]; then
+            echo -e "${cert_type} certificate (${CA_CERT_FQDN}):"
+            openssl x509 -in "$cert_file" -noout -dates -subject
+            local end_date=$(openssl x509 -in "$cert_file" -noout -enddate | cut -d= -f2)
+            local end_epoch=$(date -d "$end_date" +%s)
+            local now_epoch=$(date +%s)
+            local days_left=$(((end_epoch - now_epoch) / 86400))
+            echo -e "  ${TRML_HL}Days remaining: $days_left${TRML_NC}"
+        else
+            echo -e "${cert_type} certificate not found"
+            popd >/dev/null
+            exit 1
+        fi
+    fi
+
+    popd >/dev/null
 }
 
 case "$CMD" in
@@ -282,12 +516,21 @@ gen-server-cert)
 gen-client-cert)
     gen_machine_certificate "client"
     ;;
+gen-server-ecdsa)
+    gen_ecdsa_machine_certificate "server"
+    ;;
+gen-client-ecdsa)
+    gen_ecdsa_machine_certificate "client"
+    ;;
+check-expiry)
+    check_cert_expiry "${3:-server}"
+    ;;
 cleanup-ca)
     cleanup_ca
     ;;
 *)
-    echo -e $usage_help
-    echo -e $cmds_help
+    echo -e "$usage_help"
+    echo -e "$cmds_help"
     exit 1
     ;;
 esac
