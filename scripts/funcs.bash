@@ -14,7 +14,7 @@ init_bash_prompt() {
     fi
 
     if [ ! -d ${HOME}/.config/direnv ]; then
-        cp -r ${HOME}/.udkit/skel/direnv ${HOME}/.config/
+        cp -r ${HOME}/.udk/skel/direnv ${HOME}/.config/
     fi
 
     ## Install and configure starship prompt if not present
@@ -25,7 +25,7 @@ init_bash_prompt() {
     fi
 
     if [ ! -f ${HOME}/.config/starship.toml ]; then
-        cp ${HOME}/.udkit/skel/starship.toml ${HOME}/.config/
+        cp ${HOME}/.udk/skel/starship.toml ${HOME}/.config/
     fi
 
     ## Starship prompt configuration

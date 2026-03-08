@@ -5,5 +5,5 @@ strict_env = true
 warn_timeout = "10s"
 
 [whitelist]
-prefix = ["~/Work", "~/Temp", "~/Projects"]
+prefix = ["~/Work", "~/Projects", "~/Code", "~/Workspace"]
 exact = ["~/.envrc"]

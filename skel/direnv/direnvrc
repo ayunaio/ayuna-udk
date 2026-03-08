@@ -4,7 +4,7 @@ direnv_version "2.37.1"
 layout_pyuv() {
   local udk_version=$1
   local venv_option=${2:-""}
-  local udk_basedir=${HOME}/.udkit/dist
+  local udk_basedir=${HOME}/.udk/dist
 
   if [ -z "$udk_version" ]; then
     echo "No python version specified."
@@ -54,7 +54,7 @@ layout_pyuv() {
 ## Handle nodejs version
 use_nodejs() {
   local udk_version=$1
-  local udk_basedir=${HOME}/.udkit/dist
+  local udk_basedir=${HOME}/.udk/dist
 
   if [ -z "$udk_version" ]; then
     echo "No nodejs version specified."
@@ -75,7 +75,7 @@ use_nodejs() {
 ## Handle golang version
 use_golang() {
   local udk_version=$1
-  local udk_basedir=${HOME}/.udkit/dist
+  local udk_basedir=${HOME}/.udk/dist
 
   if [ -z "$udk_version" ]; then
     echo "No golang version specified."
@@ -100,7 +100,7 @@ use_golang() {
 ## Handle openjdk version
 use_openjdk() {
   local udk_version=$1
-  local udk_basedir=${HOME}/.udkit/dist
+  local udk_basedir=${HOME}/.udk/dist
 
   if [ -z "$udk_version" ]; then
     echo "No openjdk version specified."
@@ -124,7 +124,7 @@ use_openjdk() {
 ## Handle gradle version
 use_gradle() {
   local udk_version=$1
-  local udk_basedir=${HOME}/.udkit/dist
+  local udk_basedir=${HOME}/.udk/dist
 
   if [ -z "$udk_version" ]; then
     echo "No gradle version specified."
@@ -145,7 +145,7 @@ use_gradle() {
 ## Handle maven version
 use_maven() {
   local udk_version=$1
-  local udk_basedir=${HOME}/.udkit/dist
+  local udk_basedir=${HOME}/.udk/dist
 
   if [ -z "$udk_version" ]; then
     echo "No maven version specified."

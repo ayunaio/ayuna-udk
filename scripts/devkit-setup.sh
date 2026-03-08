@@ -14,8 +14,8 @@ if [[ $# -lt 2 ]]; then
     exit 1
 fi
 
-CACHE_DIR="${HOME}/.udkit/cache"
-UDK_DIST="${HOME}/.udkit/dist"
+CACHE_DIR="${HOME}/.udk/cache"
+UDK_DIST="${HOME}/.udk/dist"
 
 mkdir -p $CACHE_DIR $UDK_DIST
 
