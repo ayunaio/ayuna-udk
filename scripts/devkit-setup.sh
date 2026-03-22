@@ -775,3 +775,7 @@ if [[ $FORCE == "true" ]]; then
 else
     setup_devkit $KIT_NAME $KIT_VERSION
 fi
+
+sync && echo "DevKit setup done."
+
+exit 0
