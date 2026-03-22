@@ -34,6 +34,12 @@ init_bash_prompt() {
     fi
 
     ## Fuzzy finder configuration
+    if [ -z $(command -v fzf 2>/dev/null) ]; then
+        echo_info "Installing fzf..."
+        git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+        ~/.fzf/install --key-bindings --completion --no-update-rc
+    fi
+
     [ -f "${HOME}/.fzf.bash" ] && source "${HOME}/.fzf.bash"
 }
 

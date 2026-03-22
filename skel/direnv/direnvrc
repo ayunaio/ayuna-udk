@@ -89,11 +89,14 @@ use_golang() {
     load_prefix $prog_dir
     export GOROOT=$prog_dir
     export GOPATH=${udk_basedir}/goext
-
-    mkdir -p ${GOPATH}/src ${GOPATH}/bin ${GOPATH}/pkg
   elif [ -n "$sys_prog" ]; then
     export GOROOT=$(dirname $(dirname $syslog))
     export GOPATH=${udk_basedir}/goext
+  fi
+
+  if [ -n "$GOPATH" ]; then
+    mkdir -p ${GOPATH}/src ${GOPATH}/bin ${GOPATH}/pkg
+    PATH_add ${GOPATH}/bin
   fi
 }
 

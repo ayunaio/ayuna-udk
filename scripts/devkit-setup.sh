@@ -47,6 +47,7 @@ _setup_pydev_packages() {
 
     sudo apt-get install -y \
         apt-transport-https \
+        ca-certificate \
         dpkg-dev \
         gcc \
         git \
@@ -62,9 +63,14 @@ _setup_pydev_packages() {
         libreadline-dev \
         libsqlite3-dev \
         libssl-dev \
+        libzstd-dev \
         make \
+        netbase \
         tk-dev \
+        tzdata \
         uuid-dev \
+        wget \
+        xz-utils \
         zlib1g-dev && sync
 
     sudo apt-get clean -y
@@ -139,13 +145,33 @@ _install_python() {
         --enable-optimizations \
         --enable-option-checking=fatal \
         --enable-shared \
-        --with-lto \
+        $(test "${gnuArch%%-*}" != 'riscv64' && echo '--with-lto') \
         --with-ensurepip \
         --prefix=${python_dir}
 
     EXTRA_CFLAGS="$(dpkg-buildflags --get CFLAGS)"
     LDFLAGS="$(dpkg-buildflags --get LDFLAGS)"
-    LDFLAGS="${LDFLAGS:--Wl},--strip-all"
+    LDFLAGS="${LDFLAGS:-} -Wl,--strip-all"
+
+    arch="$(dpkg --print-architecture)"
+    arch="${arch##*-}"
+    # https://docs.python.org/3.12/howto/perf_profiling.html
+    # https://github.com/docker-library/python/pull/1000#issuecomment-2597021615
+    case "$arch" in
+    amd64 | arm64)
+        # only add "-mno-omit-leaf" on arches that support it
+        # https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/x86-Options.html#index-momit-leaf-frame-pointer-2
+        # https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/AArch64-Options.html#index-momit-leaf-frame-pointer
+        EXTRA_CFLAGS="${EXTRA_CFLAGS:-} -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+        ;;
+    i386)
+        # don't enable frame-pointers on 32bit x86 due to performance drop.
+        ;;
+    *)
+        # other arches don't support "-mno-omit-leaf"
+        EXTRA_CFLAGS="${EXTRA_CFLAGS:-} -fno-omit-frame-pointer"
+        ;;
+    esac
 
     make -j "$(nproc)" \
         "EXTRA_CFLAGS=${EXTRA_CFLAGS:-}" \
@@ -154,7 +180,7 @@ _install_python() {
     sync && rm python
     make -j "$(nproc)" \
         "EXTRA_CFLAGS=${EXTRA_CFLAGS:-}" \
-        "LDFLAGS=${LDFLAGS:--Wl},-rpath='\$\$ORIGIN/../lib'" \
+        "LDFLAGS=${LDFLAGS:-} -Wl,-rpath='\$\$ORIGIN/../lib'" \
         python
 
     sync && make install && sync
