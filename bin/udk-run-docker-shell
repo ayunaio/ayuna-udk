@@ -8,6 +8,10 @@ if [ -z "$DOCKER_IMG" ]; then
   exit 1
 fi
 
-docker run --rm -ti $DOCKER_IMG /bin/sh
+if [ -e "/bin/bash" ]; then
+  docker run --rm -ti $DOCKER_IMG /bin/bash
+else
+  docker run --rm -ti $DOCKER_IMG /bin/sh
+fi
 
 exit 0
