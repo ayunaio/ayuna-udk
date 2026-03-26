@@ -47,7 +47,7 @@ _setup_pydev_packages() {
 
     sudo apt-get install -y \
         apt-transport-https \
-        ca-certificate \
+        ca-certificates \
         dpkg-dev \
         gcc \
         git \
