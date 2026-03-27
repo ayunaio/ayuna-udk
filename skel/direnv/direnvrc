@@ -94,6 +94,8 @@ use_golang() {
     export GOPATH=${udk_basedir}/goext
   fi
 
+  GOPATH=${GOPATH:-}
+
   if [ -n "$GOPATH" ]; then
     mkdir -p ${GOPATH}/src ${GOPATH}/bin ${GOPATH}/pkg
     PATH_add ${GOPATH}/bin
